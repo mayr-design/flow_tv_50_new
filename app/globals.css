@@ -24,3 +24,13 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 6px 1px rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.3); }
+  50% { box-shadow: 0 0 16px 4px rgba(255,255,255,0.25); border-color: rgba(255,255,255,0.7); }
+}
+
+@keyframes pulseArrow {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}

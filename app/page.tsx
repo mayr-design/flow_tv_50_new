@@ -396,7 +396,8 @@ const PostCard = ({ post }: { post: Post }) => {
 export default function Page() {
   const [view, setView] = useState<"landing" | "catalog">("landing");
   const [typedText, setTypedText] = useState("");
-  const fullText = "50+ Flow TV posts. All created in Flow. Would you like to take a look?";
+const [typingDone, setTypingDone] = useState(false);
+  const fullText = "Since launching FlowTV with Google at I/O 2025, SpecialGuestX has shaped Veo’s visual voice across 50 plus posts on Google’s social channels. Built from hundreds of thousands of generated videos, the work fuels a growing creative library.";
 
   const [posts, setPosts] = useState<Post[]>([]);
   const [filterPlatform, setFilterPlatform] = useState<string[]>(["all"]);
@@ -414,7 +415,7 @@ export default function Page() {
     if (view !== "landing") return;
     setTypedText("");
     let i = 0;
-    const id = setInterval(() => { setTypedText(fullText.slice(0, i)); i++; if (i > fullText.length) clearInterval(id); }, 40);
+    const id = setInterval(() => { setTypedText(fullText.slice(0, i)); i++; if (i > fullText.length) { clearInterval(id); setTypingDone(true); } }, 40);
     return () => clearInterval(id);
   }, [view]);
 
@@ -462,8 +463,8 @@ export default function Page() {
               style={{ background: "linear-gradient(to top, #191919, #000000)" }}
             >
               <div className="relative w-full">
-                <p className="invisible text-base md:text-xl font-normal leading-relaxed text-left w-full select-none pr-6" aria-hidden="true">{fullText}</p>
-                <p className="absolute inset-0 text-white text-base md:text-xl font-normal leading-relaxed text-left w-full pr-6">
+                <p className="invisible text-base md:text-xl font-normal leading-snug text-left w-full select-none pr-6" aria-hidden="true">{fullText}</p>
+                <p className="absolute inset-0 text-white text-base md:text-xl font-normal leading-snug text-left w-full pr-6">
                   {typedText}
                   <motion.span animate={{ opacity: [1, 0] }} transition={{ repeat: Infinity, duration: 0.8 }} className="inline-block w-0.5 h-5 bg-white/60 ml-1 translate-y-1" />
                 </p>
@@ -471,9 +472,13 @@ export default function Page() {
               <div className="mt-1 flex w-full justify-end">
                 <button
                   onClick={() => setView("catalog")}
-                  className="w-10 h-10 rounded-full border border-[#3D3D3D] flex items-center justify-center transition-all duration-300 bg-[#1A1A1A] shadow-lg active:scale-95 group hover:border-[#666]"
+                  className={`w-10 h-10 rounded-full border flex items-center justify-center transition-all duration-300 bg-[#1A1A1A] shadow-lg active:scale-95 group hover:border-[#666] ${typingDone ? "border-white/50" : "border-[#3D3D3D]"}`}
+                  style={typingDone ? { animation: "pulseGlow 2s ease-in-out infinite 0s" } : {}}
                 >
-                  <ArrowRight size={18} className="text-[#525252] group-hover:text-white transition-colors duration-300" />
+                  <ArrowRight
+                    size={18}
+                    style={typingDone ? { animation: "pulseArrow 2s ease-in-out infinite 0s", color: "white" } : { color: "#525252" }}
+                  />
                 </button>
               </div>
             </motion.div>
