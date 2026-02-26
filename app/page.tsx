@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import Script from "next/script";
 import {
   ChevronDown,
@@ -39,14 +40,22 @@ const isVideoFile = (src?: string) => {
   return s.endsWith(".mp4") || s.endsWith(".webm") || s.endsWith(".mov") || s.endsWith(".m4v");
 };
 
-// ── Stable hover ──────────────────────────────────────────────────────────────
+const isTouchDevice = () =>
+  typeof window !== "undefined" && ("ontouchstart" in window || navigator.maxTouchPoints > 0);
+
 function useStableHover(delay = 600) {
   const [hovered, setHovered] = useState(false);
+  const [isTouch, setIsTouch] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (isTouchDevice()) { setIsTouch(true); setHovered(true); }
+  }, []);
+
   const clear = useCallback(() => { if (timer.current) clearTimeout(timer.current); }, []);
-  const onEnter = useCallback(() => { clear(); setHovered(true); }, [clear]);
-  const onLeave = useCallback(() => { clear(); timer.current = setTimeout(() => setHovered(false), delay); }, [clear, delay]);
-  const onMove  = useCallback(() => { clear(); setHovered(true); }, [clear]);
+  const onEnter = useCallback(() => { if (isTouch) return; clear(); setHovered(true); }, [clear, isTouch]);
+  const onLeave = useCallback(() => { if (isTouch) return; clear(); timer.current = setTimeout(() => setHovered(false), delay); }, [clear, delay, isTouch]);
+  const onMove  = useCallback(() => { if (isTouch) return; clear(); setHovered(true); }, [clear, isTouch]);
   useEffect(() => () => clear(), [clear]);
   return { hovered, onEnter, onLeave, onMove };
 }
@@ -54,7 +63,11 @@ function useStableHover(delay = 600) {
 // ── Logos ─────────────────────────────────────────────────────────────────────
 const FlowTVLogo = ({ className = "", onClick, size = "md" }: { className?: string; onClick?: () => void; size?: "md" | "lg" }) => (
   <div onClick={onClick} className={`cursor-pointer select-none active:scale-[0.98] transition-transform ${className}`}>
-    <img src="/flow-tv-logo.png" alt="Flow TV" className={size === "lg" ? "h-16 md:h-20 w-auto" : "h-6 md:h-7 w-auto"} />
+    <img
+      src="/flow-tv-logo.png"
+      alt="Flow TV"
+      className={size === "lg" ? "h-10 md:h-16 lg:h-20 w-auto" : "h-6 md:h-7 w-auto"}
+    />
   </div>
 );
 
@@ -65,7 +78,6 @@ const SGXLogo = ({ className = "" }: { className?: string }) => (
 );
 
 // ── Dropdown ──────────────────────────────────────────────────────────────────
-// Values stored and compared as exact raw strings from JSON. "all" = show everything.
 const Dropdown = ({
   label,
   options,
@@ -73,37 +85,61 @@ const Dropdown = ({
   onChange,
 }: {
   label: string;
-  options: string[];  // exact raw strings from JSON e.g. ["VEO", "@FLOWBYGOOGLE", "X"]
-  values: string[];   // selected raw strings, or ["all"]
+  options: string[];
+  values: string[];
   onChange: (v: string[]) => void;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const ref = useRef<HTMLDivElement | null>(null);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+  const [mounted, setMounted] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => { setMounted(true); }, []);
+
+  const updatePosition = useCallback(() => {
+    if (!buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    setMenuStyle({
+      position: "fixed",
+      top: rect.bottom + 8,
+      left: rect.left,
+      zIndex: 99999,
+      minWidth: rect.width,
+    });
+  }, []);
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setIsOpen(false);
+    if (!isOpen) return;
+    updatePosition();
+    window.addEventListener("scroll", updatePosition, true);
+    return () => window.removeEventListener("scroll", updatePosition, true);
+  }, [isOpen, updatePosition]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: MouseEvent | TouchEvent) => {
+      const t = e.target as Node;
+      if (buttonRef.current && buttonRef.current.contains(t)) return;
+      const menus = document.querySelectorAll("[data-dropdown-menu]");
+      for (const m of menus) { if (m.contains(t)) return; }
+      setIsOpen(false);
     };
-    if (isOpen) document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
   }, [isOpen]);
 
   const toggle = (raw: string) => {
-    // "all" resets everything
     if (raw === "all") return onChange(["all"]);
-
     let next = [...values];
-    if (next.includes("all")) {
-      // switching from "all" to a specific item
-      next = [raw];
-    } else if (next.includes(raw)) {
-      // deselect
+    if (next.includes("all")) next = [raw];
+    else if (next.includes(raw)) {
       next = next.filter((v) => v !== raw);
       if (next.length === 0) next = ["all"];
-    } else {
-      // add
-      next = [...next, raw];
-    }
+    } else next = [...next, raw];
     onChange(next);
   };
 
@@ -114,61 +150,72 @@ const Dropdown = ({
   }, [values, label]);
 
   return (
-    <div className="relative inline-block" ref={ref}>
+    <>
       <button
+        ref={buttonRef}
         onClick={() => setIsOpen((o) => !o)}
         style={{ background: "linear-gradient(to top, #141414, #101010)" }}
-        className="flex items-center gap-1.5 border border-[#373737] pl-3.5 pr-2 py-1.5 rounded-full text-white text-xs font-medium transition-all relative z-[60] active:scale-[0.98] w-max"
+        className="flex items-center gap-1.5 border border-[#373737] pl-3 pr-2 py-1.5 rounded-full text-white text-[11px] md:text-xs font-medium active:scale-[0.98] w-max flex-shrink-0 transition-all"
       >
-        <span>{buttonLabel}</span>
-        <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.3 }} className="flex items-center justify-center">
-          <ChevronDown size={14} className="text-white/80" />
+        <span className="max-w-[80px] md:max-w-none truncate">{buttonLabel}</span>
+        <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.3 }} className="flex items-center justify-center flex-shrink-0">
+          <ChevronDown size={12} className="text-white/80" />
         </motion.div>
       </button>
 
-      <AnimatePresence>
-        {isOpen && (
+      {mounted && isOpen && createPortal(
+        <AnimatePresence>
           <motion.div
-            initial={{ opacity: 0, y: 10, scale: 0.96 }}
+            key="dropdown"
+            data-dropdown-menu
+            initial={{ opacity: 0, y: 6, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.96 }}
-            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-            className="absolute top-full mt-3 left-0 min-w-[220px] w-max border border-[#373737] rounded-[2rem] overflow-hidden z-[80] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)]"
-            style={{ backgroundColor: "rgba(16,16,16,0.78)", backdropFilter: "blur(40px)" }}
+            exit={{ opacity: 0, y: 6, scale: 0.97 }}
+            transition={{ duration: 0.15, ease: [0.4, 0, 0.2, 1] }}
+            style={{
+              ...menuStyle,
+              backgroundColor: "rgba(16,16,16,0.75)",
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)",
+            }}
+            className="w-max border border-[#373737] rounded-[1.25rem] overflow-hidden shadow-[0_25px_60px_-15px_rgba(0,0,0,0.8)]"
           >
-            <div className="py-2.5">
-              {/* "All" row */}
+            <div className="py-2 px-2">
+              {/* All option */}
               <button
-                onClick={() => toggle("all")}
-                className="w-full text-left px-5 py-2.5 text-[13px] text-white hover:bg-white/10 transition-colors flex items-center gap-3.5 group"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { toggle("all"); setIsOpen(false); }}
+                className="w-full text-left text-[13px] text-white flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/10 active:bg-white/10 transition-colors"
               >
-                <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${values.includes("all") ? "border-white" : "border-white/40 group-hover:border-white"}`}>
-                  {values.includes("all") && <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="w-2.5 h-2.5 bg-white rounded-full" />}
+                <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${values.includes("all") ? "border-white" : "border-white/40"}`}>
+                  {values.includes("all") && <div className="w-2.5 h-2.5 bg-white rounded-full" />}
                 </div>
-                <span className="font-normal whitespace-nowrap">All {label.replace("All ", "")}</span>
+                <span className="whitespace-nowrap">All {label.replace("All ", "")}</span>
               </button>
 
-              {/* Individual options — displayed and stored exactly as they come from JSON */}
+              {/* Individual options */}
               {options.map((raw) => {
                 const isActive = values.includes(raw);
                 return (
                   <button
                     key={raw}
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => toggle(raw)}
-                    className="w-full text-left px-5 py-2.5 text-[13px] text-white hover:bg-white/10 transition-colors flex items-center gap-3.5 group"
+                    className="w-full text-left text-[13px] text-white flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/10 active:bg-white/10 transition-colors"
                   >
-                    <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${isActive ? "border-white" : "border-white/40 group-hover:border-white"}`}>
-                      {isActive && <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="w-2.5 h-2.5 bg-white rounded-full" />}
+                    <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${isActive ? "border-white" : "border-white/40"}`}>
+                      {isActive && <div className="w-2.5 h-2.5 bg-white rounded-full" />}
                     </div>
-                    <span className="font-normal whitespace-nowrap">{raw}</span>
+                    <span className="whitespace-nowrap">{raw}</span>
                   </button>
                 );
               })}
             </div>
           </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+        </AnimatePresence>,
+        document.body
+      )}
+    </>
   );
 };
 
@@ -184,15 +231,15 @@ function useAspectRatio(src?: string) {
   const [ratio, setRatio] = useState<number | null>(null);
   useEffect(() => {
     if (!src) return;
-    // Don't reset to null — keep previous ratio until new one loads
-    // This prevents the collapse/bounce glitch when switching slides
     if (isVideoFile(src)) {
       const el = document.createElement("video");
       el.preload = "metadata";
       el.src = src;
       el.muted = true;
+      el.playsInline = true;
       const onLoaded = () => { if (el.videoWidth && el.videoHeight) setRatio(el.videoWidth / el.videoHeight); };
       el.addEventListener("loadedmetadata", onLoaded);
+      el.load();
       return () => el.removeEventListener("loadedmetadata", onLoaded);
     } else {
       const img = new Image();
@@ -244,7 +291,7 @@ function MediaCarousel({ media, href, showMadeWithFlow }: { media: string[]; hre
         style={{ cursor: isVideo ? "pointer" : "default" }}
       >
         {isVideo ? (
-          <video ref={videoRef} src={src} className="w-full h-full object-contain" muted={isMuted} playsInline preload="metadata" loop onEnded={() => setIsPlaying(false)} />
+          <video ref={videoRef} src={`${src}#t=0.001`} className="w-full h-full object-contain" muted={isMuted} playsInline preload="metadata" loop onEnded={() => setIsPlaying(false)} />
         ) : src ? (
           <img src={src} alt="" className="w-full h-full object-contain" draggable={false} />
         ) : (
@@ -314,25 +361,25 @@ const PostCard = ({ post }: { post: Post }) => {
           {showCaption && (
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}
-              className="absolute inset-0 z-[40] bg-black/85 backdrop-blur-xl p-6 md:p-8 flex flex-col justify-center rounded-[1rem] md:rounded-[1.25rem]"
+              className="absolute inset-0 z-[40] bg-black/85 backdrop-blur-xl p-5 md:p-8 flex flex-col justify-center rounded-[1rem] md:rounded-[1.25rem]"
             >
               <button onClick={() => setShowCaption(false)} className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors">
                 <CloseIcon size={20} />
               </button>
-              <p className="text-white text-[13px] md:text-[14px] leading-relaxed whitespace-pre-wrap">{post.caption ?? ""}</p>
+              <p className="text-white text-[12px] md:text-[14px] leading-relaxed whitespace-pre-wrap">{post.caption ?? ""}</p>
             </motion.div>
           )}
         </AnimatePresence>
         <MediaCarousel media={media} href={post.url} showMadeWithFlow={post.platform === "IG"} />
       </div>
 
-      <div className="flex items-center gap-1 flex-nowrap overflow-x-auto no-scrollbar px-2">
+      <div className="flex items-center gap-1 flex-nowrap overflow-x-auto no-scrollbar px-1">
         <Tag>{post.platform}</Tag>
         {!!post.account && <Tag>{post.account}</Tag>}
         {!!post.category && <Tag>{post.category}</Tag>}
         <button
           onClick={() => setShowCaption((s) => !s)}
-          className="ml-auto flex items-center gap-1 text-[9px] md:text-[10px] text-zinc-500 hover:text-white transition-colors px-1 whitespace-nowrap"
+          className="ml-auto flex items-center gap-1 text-[9px] md:text-[10px] text-zinc-500 hover:text-white transition-colors px-1 whitespace-nowrap flex-shrink-0"
         >
           {showCaption ? <CloseIcon size={10} /> : <Plus size={10} />}
           {showCaption ? "Hide" : "Caption"}
@@ -346,7 +393,7 @@ const PostCard = ({ post }: { post: Post }) => {
 export default function Page() {
   const [view, setView] = useState<"landing" | "catalog">("landing");
   const [typedText, setTypedText] = useState("");
-  const fullText = "50+ Flow TV posts. All created in Flow. Would you like to take a look?";
+  const fullText = "50+ Flow TV posts created in Flow. Would you like to take a look?";
 
   const [posts, setPosts] = useState<Post[]>([]);
   const [filterPlatform, setFilterPlatform] = useState<string[]>(["all"]);
@@ -368,7 +415,6 @@ export default function Page() {
     return () => clearInterval(id);
   }, [view]);
 
-  // Options built directly from JSON — exact raw strings, no transformation
   const platformOptions = useMemo(() =>
     Array.from(new Set(posts.map((p) => p.platform))).sort()
   , [posts]);
@@ -381,19 +427,12 @@ export default function Page() {
     Array.from(new Set(posts.map((p) => p.category).filter((c): c is string => !!c))).sort()
   , [posts]);
 
-  // Filter: exact string match against raw JSON values — no normalization at all
-  const filteredPosts = useMemo(() => {
-    console.log("filterPlatform:", JSON.stringify(filterPlatform));
-    console.log("filterAccount:", JSON.stringify(filterAccount));
-    console.log("filterContent:", JSON.stringify(filterContent));
-    console.log("first post:", JSON.stringify(posts[0]));
-    return posts.filter((p) => {
-      const matchPlat = filterPlatform.includes("all") || filterPlatform.includes(p.platform);
-      const matchAcc  = filterAccount.includes("all")  || filterAccount.includes(p.account ?? "");
-      const matchCat  = filterContent.includes("all")  || filterContent.includes(p.category ?? "");
-      return matchPlat && matchAcc && matchCat;
-    });
-  }, [posts, filterPlatform, filterAccount, filterContent]);
+  const filteredPosts = useMemo(() => posts.filter((p) => {
+    const matchPlat = filterPlatform.includes("all") || filterPlatform.includes(p.platform);
+    const matchAcc  = filterAccount.includes("all")  || filterAccount.includes(p.account ?? "");
+    const matchCat  = filterContent.includes("all")  || filterContent.includes(p.category ?? "");
+    return matchPlat && matchAcc && matchCat;
+  }), [posts, filterPlatform, filterAccount, filterContent]);
 
   return (
     <div className="min-h-screen bg-black text-white selection:bg-white/20 overflow-x-hidden">
@@ -406,9 +445,9 @@ export default function Page() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0, y: -15, filter: "blur(15px)", transition: { duration: 0.6, ease: [0.4, 0, 0.2, 1] } }}
-            className="h-screen flex flex-col items-center justify-center p-6 relative"
+            className="h-screen flex flex-col items-center justify-center px-5 md:px-6 relative"
           >
-            <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, ...SMOOTH_TRANSITION }} className="mb-10">
+            <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, ...SMOOTH_TRANSITION }} className="mb-6 md:mb-10">
               <FlowTVLogo size="lg" />
             </motion.div>
 
@@ -420,8 +459,8 @@ export default function Page() {
               style={{ background: "linear-gradient(to top, #191919, #000000)" }}
             >
               <div className="relative w-full">
-                <p className="invisible text-lg md:text-xl font-normal leading-relaxed text-left w-full select-none pr-6" aria-hidden="true">{fullText}</p>
-                <p className="absolute inset-0 text-white text-lg md:text-xl font-normal leading-relaxed text-left w-full pr-6">
+                <p className="invisible text-base md:text-xl font-normal leading-relaxed text-left w-full select-none pr-6" aria-hidden="true">{fullText}</p>
+                <p className="absolute inset-0 text-white text-base md:text-xl font-normal leading-relaxed text-left w-full pr-6">
                   {typedText}
                   <motion.span animate={{ opacity: [1, 0] }} transition={{ repeat: Infinity, duration: 0.8 }} className="inline-block w-0.5 h-5 bg-white/60 ml-1 translate-y-1" />
                 </p>
@@ -436,26 +475,49 @@ export default function Page() {
               </div>
             </motion.div>
 
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8, duration: 1 }} className="absolute bottom-12 left-1/2 -translate-x-1/2">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8, duration: 1 }} className="absolute bottom-10 left-1/2 -translate-x-1/2">
               <SGXLogo />
             </motion.div>
           </motion.div>
         ) : (
-          <motion.div key="catalog" variants={containerVariants} initial="hidden" animate="visible" className="p-6 md:p-10 relative">
-            <motion.header variants={itemVariants} className="relative flex items-center justify-between mb-12 z-[100]">
-              <FlowTVLogo onClick={() => setView("landing")} className="hover:opacity-70 transition-opacity flex-shrink-0" />
-              <div className="absolute left-1/2 -translate-x-1/2 flex flex-wrap items-center gap-2 md:gap-3">
-                <Dropdown label="All Platforms" options={platformOptions} values={filterPlatform} onChange={setFilterPlatform} />
-                <Dropdown label="All Accounts"  options={accountOptions}  values={filterAccount}  onChange={setFilterAccount}  />
-                <Dropdown label="All Contents"  options={categoryOptions}  values={filterContent}  onChange={setFilterContent}  />
+          <motion.div key="catalog" variants={containerVariants} initial="hidden" animate="visible" className="p-4 md:p-10 relative">
+
+            <motion.header variants={itemVariants} className="mb-6 md:mb-12 z-[100] relative">
+              {/* Mobile */}
+              <div className="md:hidden">
+                <div className="flex items-center justify-between mb-4">
+                  <FlowTVLogo onClick={() => setView("landing")} className="hover:opacity-70 transition-opacity" />
+                  <SGXLogo />
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Dropdown label="All Platforms" options={platformOptions} values={filterPlatform} onChange={setFilterPlatform} />
+                  <Dropdown label="All Accounts"  options={accountOptions}  values={filterAccount}  onChange={setFilterAccount}  />
+                  <Dropdown label="All Contents"  options={categoryOptions}  values={filterContent}  onChange={setFilterContent}  />
+                </div>
               </div>
-              <SGXLogo className="flex-shrink-0 hidden md:block" />
+
+              {/* Desktop */}
+              <div className="hidden md:flex items-center justify-between relative">
+                <FlowTVLogo onClick={() => setView("landing")} className="hover:opacity-70 transition-opacity flex-shrink-0" />
+                <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-3">
+                  <Dropdown label="All Platforms" options={platformOptions} values={filterPlatform} onChange={setFilterPlatform} />
+                  <Dropdown label="All Accounts"  options={accountOptions}  values={filterAccount}  onChange={setFilterAccount}  />
+                  <Dropdown label="All Contents"  options={categoryOptions}  values={filterContent}  onChange={setFilterContent}  />
+                </div>
+                <SGXLogo className="flex-shrink-0" />
+              </div>
             </motion.header>
 
             <main className="relative z-10">
-              <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 [column-fill:_balance]">
+              <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4 [column-fill:_balance]">
                 {filteredPosts.map((post, idx) => (
-                  <motion.div key={`${post.url}-${idx}`} initial={{ opacity: 0, y: 15, filter: "blur(10px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1], delay: idx * 0.05 }} className="mb-10 break-inside-avoid">
+                  <motion.div
+                    key={`${post.url}-${idx}`}
+                    initial={{ opacity: 0, y: 15, filter: "blur(10px)" }}
+                    animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                    transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1], delay: idx * 0.05 }}
+                    className="mb-6 md:mb-10 break-inside-avoid"
+                  >
                     <PostCard post={post} />
                   </motion.div>
                 ))}
