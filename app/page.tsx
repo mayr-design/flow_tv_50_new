@@ -361,12 +361,15 @@ const PostCard = ({ post }: { post: Post }) => {
           {showCaption && (
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}
-              className="absolute inset-0 z-[40] bg-black/85 backdrop-blur-xl p-5 md:p-8 flex flex-col justify-center rounded-[1rem] md:rounded-[1.25rem]"
+              className="absolute inset-0 z-[40] bg-black/85 backdrop-blur-xl flex flex-col rounded-[1rem] md:rounded-[1.25rem] overflow-hidden"
             >
-              <button onClick={() => setShowCaption(false)} className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors">
+              <button onClick={() => setShowCaption(false)} className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors z-10">
                 <CloseIcon size={20} />
               </button>
-              <p className="text-white text-[12px] md:text-[14px] leading-relaxed whitespace-pre-wrap">{post.caption ?? ""}</p>
+              <div className="overflow-y-auto h-full p-5 md:p-8">
+                <p className="text-white text-[12px] md:text-[14px] leading-relaxed whitespace-pre-wrap pr-6">{post.caption ?? ""}</p>
+              </div>
+              <div className="absolute bottom-0 inset-x-0 h-10 bg-gradient-to-t from-black/85 to-transparent pointer-events-none rounded-b-[1rem] md:rounded-b-[1.25rem]" />
             </motion.div>
           )}
         </AnimatePresence>
@@ -382,7 +385,7 @@ const PostCard = ({ post }: { post: Post }) => {
           className="ml-auto flex items-center gap-1 text-[9px] md:text-[10px] text-zinc-500 hover:text-white transition-colors px-1 whitespace-nowrap flex-shrink-0"
         >
           {showCaption ? <CloseIcon size={10} /> : <Plus size={10} />}
-          {showCaption ? "Hide" : "Caption"}
+          {showCaption ? "Hide Caption" : "View Caption"}
         </button>
       </div>
     </div>
@@ -393,7 +396,7 @@ const PostCard = ({ post }: { post: Post }) => {
 export default function Page() {
   const [view, setView] = useState<"landing" | "catalog">("landing");
   const [typedText, setTypedText] = useState("");
-  const fullText = "50+ Flow TV posts created in Flow. Would you like to take a look?";
+  const fullText = "50+ Flow TV posts. All created in Flow. Would you like to take a look?";
 
   const [posts, setPosts] = useState<Post[]>([]);
   const [filterPlatform, setFilterPlatform] = useState<string[]>(["all"]);
