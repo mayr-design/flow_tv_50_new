@@ -449,39 +449,41 @@ const [typingDone, setTypingDone] = useState(false);
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0, y: -15, filter: "blur(15px)", transition: { duration: 0.6, ease: [0.4, 0, 0.2, 1] } }}
-            className="h-screen flex flex-col items-center justify-center px-5 md:px-6 relative"
+            className="h-screen max-h-screen overflow-hidden flex flex-col items-center justify-center px-5 md:px-6 relative py-16 md:py-12"
           >
-            <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, ...SMOOTH_TRANSITION }} className="mb-6 md:mb-10">
-              <FlowTVLogo size="lg" />
-            </motion.div>
+            <div className="flex flex-col items-center gap-6 md:gap-10 w-full max-w-xl">
+              <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, ...SMOOTH_TRANSITION }}>
+                <FlowTVLogo size="lg" />
+              </motion.div>
 
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4, ...SMOOTH_TRANSITION }}
-              className="w-full max-w-xl border border-[#3B3B3B] rounded-[2rem] pt-5 pb-[10px] pr-[10px] pl-7 relative overflow-hidden flex flex-col items-start justify-start"
-              style={{ background: "linear-gradient(to top, #191919, #000000)" }}
-            >
-              <div className="relative w-full">
-                <p className="invisible text-base md:text-xl font-normal leading-snug text-left w-full select-none pr-6" aria-hidden="true">{fullText}</p>
-                <p className="absolute inset-0 text-white text-base md:text-xl font-normal leading-snug text-left w-full pr-6">
-                  {typedText}
-                  <motion.span animate={{ opacity: [1, 0] }} transition={{ repeat: Infinity, duration: 0.8 }} className="inline-block w-0.5 h-5 bg-white/60 ml-1 translate-y-1" />
-                </p>
-              </div>
-              <div className="mt-1 flex w-full justify-end">
-                <button
-                  onClick={() => setView("catalog")}
-                  className={`w-10 h-10 rounded-full border flex items-center justify-center transition-all duration-300 bg-[#1A1A1A] shadow-lg active:scale-95 group hover:border-[#666] ${typingDone ? "border-white/50" : "border-[#3D3D3D]"}`}
-                  style={typingDone ? { animation: "pulseGlow 2s ease-in-out infinite 0s" } : {}}
-                >
-                  <ArrowRight
-                    size={18}
-                    style={typingDone ? { animation: "pulseArrow 2s ease-in-out infinite 0s", color: "white" } : { color: "#525252" }}
-                  />
-                </button>
-              </div>
-            </motion.div>
+              <motion.div
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4, ...SMOOTH_TRANSITION }}
+                className="w-full border border-[#3B3B3B] rounded-[2rem] pt-4 pb-[10px] pr-[10px] pl-7 relative overflow-hidden flex flex-col items-start justify-start"
+                style={{ background: "linear-gradient(to top, #191919, #000000)" }}
+              >
+                <div className="relative w-full">
+                  <p className="invisible text-base md:text-xl font-normal leading-snug text-left w-full select-none pr-6" aria-hidden="true">{fullText}</p>
+                  <p className="absolute inset-0 text-white text-base md:text-xl font-normal leading-snug text-left w-full pr-6">
+                    {typedText}
+                    <motion.span animate={{ opacity: [1, 0] }} transition={{ repeat: Infinity, duration: 0.8 }} className="inline-block w-0.5 h-5 bg-white/60 ml-1 translate-y-1" />
+                  </p>
+                </div>
+                <div className="mt-1 flex w-full justify-end">
+                  <button
+                    onClick={() => setView("catalog")}
+                    className={`w-10 h-10 rounded-full border flex items-center justify-center transition-all duration-300 bg-[#1A1A1A] shadow-lg active:scale-95 group hover:border-[#666] ${typingDone ? "border-white/50" : "border-[#3D3D3D]"}`}
+                    style={typingDone ? { animation: "pulseGlow 2s ease-in-out infinite 0s" } : {}}
+                  >
+                    <ArrowRight
+                      size={18}
+                      style={typingDone ? { animation: "pulseArrow 2s ease-in-out infinite 0s", color: "white" } : { color: "#525252" }}
+                    />
+                  </button>
+                </div>
+              </motion.div>
+            </div>
 
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8, duration: 1 }} className="absolute bottom-10 left-1/2 -translate-x-1/2">
               <SGXLogo />
